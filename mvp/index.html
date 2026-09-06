@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alert Ranking Dashboard - anattar.com MVP</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0d10; color: #e6e6e6; margin: 0; padding: 32px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  p.sub { color: #9aa0a6; margin-top: 0; font-size: 13px; }
+  .panel { background: #14171a; border: 1px solid #2a2f34; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+  input[type=file] { color: #e6e6e6; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #2a2f34; }
+  th { color: #9aa0a6; font-weight: 600; }
+  tr:hover { background: #1b1f23; }
+  .score { font-weight: 700; }
+  .score-high { color: #ff6b6b; }
+  .score-med { color: #ffd166; }
+  .score-low { color: #8fd694; }
+  .breakdown { font-size: 11px; color: #9aa0a6; }
+  .empty { color: #9aa0a6; font-size: 13px; padding: 20px 0; }
+  button { background: #2d6cdf; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  a.sample { color: #6ea8ff; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>Alert Ranking Dashboard</h1>
+  <p class="sub">anattar.com MVP -- single-institution CSV upload, fixed explainable risk score. No data leaves this browser tab.</p>
+
+  <div class="panel">
+    <input type="file" id="csvFile" accept=".csv,text/csv" />
+    <button id="loadSampleBtn" type="button">Load sample CSV</button>
+    <div id="status" style="margin-top:10px; font-size:12px; color:#9aa0a6;"></div>
+  </div>
+
+  <div class="panel">
+    <table id="resultsTable" style="display:none;">
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Alert ID</th>
+          <th>Amount</th>
+          <th>Type</th>
+          <th>Account Age (days)</th>
+          <th>Prior Alerts (90d)</th>
+          <th>Risk Score</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+    <div id="emptyState" class="empty">Upload a CSV export to see ranked alerts.</div>
+  </div>
+
+  <script src="alert-scoring.js"></script>
+  <script>
+    const fileInput = document.getElementById('csvFile');
+    const statusEl = document.getElementById('status');
+    const table = document.getElementById('resultsTable');
+    const body = document.getElementById('resultsBody');
+    const emptyState = document.getElementById('emptyState');
+
+    const SAMPLE_CSV = `alert_id,amount,alert_type,account_age_days,prior_alerts_90d
+A-1001,45000,sanctions_match,40,1
+A-1002,2500,other,900,0
+A-1003,9800,structuring,60,3
+A-1004,15000,high_risk_country,200,0
+A-1005,600,velocity,15,4
+A-1006,32000,large_cash,1000,0`;
+
+    function scoreClass(score) {
+      if (score >= 60) return 'score-high';
+      if (score >= 30) return 'score-med';
+      return 'score-low';
+    }
+
+    function render(alerts) {
+      const ranked = window.AlertScoring.rankAlerts(alerts);
+      body.innerHTML = '';
+      ranked.forEach((a, i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${i + 1}</td>
+          <td>${a.alert_id || ''}</td>
+          <td>$${Number(a.amount || 0).toLocaleString()}</td>
+          <td>${a.alert_type || ''}</td>
+          <td>${a.account_age_days || ''}</td>
+          <td>${a.prior_alerts_90d || ''}</td>
+          <td class="score ${scoreClass(a.risk_score)}">${a.risk_score}
+            <div class="breakdown">amt ${a.score_breakdown.amount_component} + type ${a.score_breakdown.type_component} + tenure ${a.score_breakdown.tenure_component} + repeat ${a.score_breakdown.repeat_component}</div>
+          </td>`;
+        body.appendChild(tr);
+      });
+      table.style.display = ranked.length ? 'table' : 'none';
+      emptyState.style.display = ranked.length ? 'none' : 'block';
+      statusEl.textContent = `Ranked ${ranked.length} alert(s).`;
+    }
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const alerts = window.AlertScoring.parseCSV(reader.result);
+        render(alerts);
+      };
+      reader.onerror = () => { statusEl.textContent = 'Failed to read file.'; };
+      reader.readAsText(file);
+    });
+
+    document.getElementById('loadSampleBtn').addEventListener('click', () => {
+      const alerts = window.AlertScoring.parseCSV(SAMPLE_CSV);
+      render(alerts);
+    });
+  </script>
+</body>
+</html>
