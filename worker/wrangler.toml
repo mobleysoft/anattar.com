@@ -14,3 +14,11 @@ account_id = "f07be5f84583d0d100b05aeeae56870b"
 directory = "../mvp"
 binding = "ASSETS"
 run_worker_first = true
+
+# Lead capture for the MVP dashboard's "request access" form -- see
+# insight.next_step in ventures.json ("a named target compliance-officer
+# customer to try it, not more building"). Dedicated to this venture only,
+# not shared infra, so it carries no blast radius for other ventures.
+[[kv_namespaces]]
+binding = "LEADS"
+id = "85a24d0d20c041f2a8176aec7bdc1743"

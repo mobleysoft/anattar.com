@@ -23,9 +23,53 @@ function cacheControl(url, response) {
   return documentLike ? 'no-cache' : 'public, max-age=3600';
 }
 
+function jsonResponse(payload, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: securedHeaders({}, { 'Content-Type': 'application/json; charset=utf-8' })
+  });
+}
+
+function isValidEmail(value) {
+  return typeof value === 'string' && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+// Real lead capture for the MVP dashboard -- ventures.json's own
+// insight.next_step says the real next step is a named compliance-officer
+// customer, not more building. Before this, the live dashboard had no way
+// for an interested visitor to leave contact info. KV binding is dedicated
+// to this venture (see wrangler.toml), not shared infra.
+async function handleInterest(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, error: 'invalid JSON body' }, 400);
+  }
+  const email = String(body?.email || '').trim().toLowerCase();
+  if (!isValidEmail(email)) {
+    return jsonResponse({ ok: false, error: 'a valid email is required' }, 400);
+  }
+  const institution = String(body?.institution || '').trim().slice(0, 200);
+  const record = { email, institution, submitted_at: new Date().toISOString() };
+  await env.LEADS.put(`lead:${email}`, JSON.stringify(record));
+  return jsonResponse({ ok: true }, 201);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (url.pathname === '/api/interest') {
+      if (request.method !== 'POST') {
+        return new Response('Method Not Allowed\n', {
+          status: 405,
+          headers: securedHeaders({ Allow: 'POST' })
+        });
+      }
+      return handleInterest(request, env);
+    }
+
     const asset = await env.ASSETS.fetch(request);
     return new Response(asset.body, {
       status: asset.status,
