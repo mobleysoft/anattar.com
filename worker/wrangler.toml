@@ -1,0 +1,16 @@
+name = "anattar-com-worker"
+main = "worker.js"
+compatibility_date = "2026-09-11"
+account_id = "f07be5f84583d0d100b05aeeae56870b"
+
+# Serves the real, tested MVP (../mvp: alert-ranking dashboard, verified
+# 2026-09-06 with node -e assertions - see ventures.json insight.evidence
+# for anattar.com). Deliberately no [[routes]] here - the zone's root/www
+# routes are managed explicitly via the Cloudflare API (see
+# mascom/flagged_next_steps_backlog.json item
+# "stage-scan-deploy-gap-generic-template"), not by wrangler, so the
+# existing route entries aren't touched except the one being fixed.
+[assets]
+directory = "../mvp"
+binding = "ASSETS"
+run_worker_first = true
