@@ -89,16 +89,17 @@ A-1006,32000,large_cash,1000,0`;
 
     function render(alerts) {
       const ranked = window.AlertScoring.rankAlerts(alerts);
+      const esc = window.AlertScoring.escapeHtml;
       body.innerHTML = '';
       ranked.forEach((a, i) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${i + 1}</td>
-          <td>${a.alert_id || ''}</td>
+          <td>${esc(a.alert_id || '')}</td>
           <td>$${Number(a.amount || 0).toLocaleString()}</td>
-          <td>${a.alert_type || ''}</td>
-          <td>${a.account_age_days || ''}</td>
-          <td>${a.prior_alerts_90d || ''}</td>
+          <td>${esc(a.alert_type || '')}</td>
+          <td>${esc(a.account_age_days || '')}</td>
+          <td>${esc(a.prior_alerts_90d || '')}</td>
           <td class="score ${scoreClass(a.risk_score)}">${a.risk_score}
             <div class="breakdown">amt ${a.score_breakdown.amount_component} + type ${a.score_breakdown.type_component} + tenure ${a.score_breakdown.tenure_component} + repeat ${a.score_breakdown.repeat_component}</div>
           </td>`;

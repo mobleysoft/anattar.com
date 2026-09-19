@@ -6,7 +6,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { scoreAlert, rankAlerts, parseCSV, TYPE_WEIGHTS } = require('./alert-scoring.js');
+const { scoreAlert, rankAlerts, parseCSV, escapeHtml, TYPE_WEIGHTS } = require('./alert-scoring.js');
 
 test('amount_component caps at 40 for amounts >= $40k', () => {
   const low = scoreAlert({ amount: 5000, alert_type: 'other', account_age_days: 400, prior_alerts_90d: 0 });
@@ -97,4 +97,14 @@ A-1006,32000,large_cash,1000,0`;
   assert.equal(ranked.length, 6);
   assert.equal(ranked[0].alert_id, 'A-1001');
   ranked.forEach((a) => assert.equal(Number.isNaN(a.risk_score), false));
+});
+
+test('escapeHtml neutralizes markup so a malicious CSV field cannot inject script into the dashboard', () => {
+  assert.equal(
+    escapeHtml('<img src=x onerror=alert(1)>'),
+    '&lt;img src=x onerror=alert(1)&gt;'
+  );
+  assert.equal(escapeHtml(`"quoted" & 'apostrophe'`), '&quot;quoted&quot; &amp; &#39;apostrophe&#39;');
+  assert.equal(escapeHtml(''), '');
+  assert.equal(escapeHtml(42), '42');
 });

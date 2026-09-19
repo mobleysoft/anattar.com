@@ -148,10 +148,21 @@ function parseCSV(text) {
   });
 }
 
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+// The dashboard renders parsed CSV fields into the DOM via innerHTML template
+// strings. A CSV's alert_id/alert_type/etc. columns are not necessarily
+// operator-authored -- they can carry through free text from an upstream
+// case-management system -- so they must be escaped before interpolation,
+// same as any other untrusted string rendered as HTML.
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
+}
+
 // Export for both Node (testing) and browser (dashboard) use.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { scoreAlert, rankAlerts, parseCSV, TYPE_WEIGHTS };
+  module.exports = { scoreAlert, rankAlerts, parseCSV, escapeHtml, TYPE_WEIGHTS };
 }
 if (typeof window !== 'undefined') {
-  window.AlertScoring = { scoreAlert, rankAlerts, parseCSV, TYPE_WEIGHTS };
+  window.AlertScoring = { scoreAlert, rankAlerts, parseCSV, escapeHtml, TYPE_WEIGHTS };
 }
