@@ -31,6 +31,7 @@
   <div class="panel">
     <input type="file" id="csvFile" accept=".csv,text/csv" />
     <button id="loadSampleBtn" type="button">Load sample CSV</button>
+    <button id="downloadBtn" type="button" disabled>Download ranked CSV</button>
     <div id="status" style="margin-top:10px; font-size:12px; color:#9aa0a6;"></div>
   </div>
 
@@ -72,6 +73,8 @@
     const table = document.getElementById('resultsTable');
     const body = document.getElementById('resultsBody');
     const emptyState = document.getElementById('emptyState');
+    const downloadBtn = document.getElementById('downloadBtn');
+    let lastRanked = [];
 
     const SAMPLE_CSV = `alert_id,amount,alert_type,account_age_days,prior_alerts_90d
 A-1001,45000,sanctions_match,40,1
@@ -89,6 +92,8 @@ A-1006,32000,large_cash,1000,0`;
 
     function render(alerts) {
       const ranked = window.AlertScoring.rankAlerts(alerts);
+      lastRanked = ranked;
+      downloadBtn.disabled = ranked.length === 0;
       const esc = window.AlertScoring.escapeHtml;
       body.innerHTML = '';
       ranked.forEach((a, i) => {
@@ -125,6 +130,20 @@ A-1006,32000,large_cash,1000,0`;
     document.getElementById('loadSampleBtn').addEventListener('click', () => {
       const alerts = window.AlertScoring.parseCSV(SAMPLE_CSV);
       render(alerts);
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      if (!lastRanked.length) return;
+      const csv = window.AlertScoring.toCSV(lastRanked);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ranked-alerts-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     });
 
     document.getElementById('interestForm').addEventListener('submit', async (e) => {

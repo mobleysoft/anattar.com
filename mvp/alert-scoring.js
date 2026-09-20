@@ -159,10 +159,42 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
 }
 
+const EXPORT_COLUMNS = [
+  'rank', 'alert_id', 'amount', 'alert_type', 'account_age_days',
+  'prior_alerts_90d', 'risk_score', 'amount_component', 'type_component',
+  'tenure_component', 'repeat_component',
+];
+
+// RFC4180-style field quoting: quote (and escape embedded quotes) whenever a
+// field contains a comma, quote, or newline -- needed here because ranked
+// alerts already carry free text from an upstream CSV (see escapeHtml above),
+// and re-exporting that text has the same "not necessarily safe as-is" issue
+// in the other direction (a value containing a comma would silently shift
+// columns in the exported file if left unquoted).
+function csvField(value) {
+  const s = String(value === undefined || value === null ? '' : value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// Ranked, scored alerts -> a CSV the compliance officer can save as their
+// own audit trail for why the queue was triaged in this order (the same
+// per-component breakdown shown in the dashboard, not just the total score).
+// Pure string in, string out -- no DOM/Blob dependency, so it's testable
+// under plain node:test the same as the rest of this module.
+function toCSV(rankedAlerts) {
+  const header = EXPORT_COLUMNS.join(',');
+  const rows = rankedAlerts.map((a, i) => EXPORT_COLUMNS.map((col) => {
+    if (col === 'rank') return i + 1;
+    if (col in (a.score_breakdown || {})) return a.score_breakdown[col];
+    return csvField(a[col]);
+  }).join(','));
+  return [header, ...rows].join('\n') + '\n';
+}
+
 // Export for both Node (testing) and browser (dashboard) use.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { scoreAlert, rankAlerts, parseCSV, escapeHtml, TYPE_WEIGHTS };
+  module.exports = { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS };
 }
 if (typeof window !== 'undefined') {
-  window.AlertScoring = { scoreAlert, rankAlerts, parseCSV, escapeHtml, TYPE_WEIGHTS };
+  window.AlertScoring = { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS };
 }

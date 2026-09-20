@@ -6,7 +6,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { scoreAlert, rankAlerts, parseCSV, escapeHtml, TYPE_WEIGHTS } = require('./alert-scoring.js');
+const { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS } = require('./alert-scoring.js');
 
 test('amount_component caps at 40 for amounts >= $40k', () => {
   const low = scoreAlert({ amount: 5000, alert_type: 'other', account_age_days: 400, prior_alerts_90d: 0 });
@@ -107,4 +107,30 @@ test('escapeHtml neutralizes markup so a malicious CSV field cannot inject scrip
   assert.equal(escapeHtml(`"quoted" & 'apostrophe'`), '&quot;quoted&quot; &amp; &#39;apostrophe&#39;');
   assert.equal(escapeHtml(''), '');
   assert.equal(escapeHtml(42), '42');
+});
+
+test('toCSV: includes rank, original fields, total score, and per-component breakdown', () => {
+  const ranked = rankAlerts([
+    { alert_id: 'A-1', amount: 45000, alert_type: 'sanctions_match', account_age_days: 40, prior_alerts_90d: 1 },
+  ]);
+  const csv = toCSV(ranked);
+  const [header, row] = csv.trim().split('\n');
+  assert.equal(header, 'rank,alert_id,amount,alert_type,account_age_days,prior_alerts_90d,risk_score,amount_component,type_component,tenure_component,repeat_component');
+  const cells = row.split(',');
+  assert.equal(cells[0], '1');
+  assert.equal(cells[1], 'A-1');
+  assert.equal(cells[6], String(ranked[0].risk_score));
+});
+
+test('toCSV: quotes fields containing commas or quotes, escapes embedded quotes', () => {
+  const ranked = rankAlerts([
+    { alert_id: 'A-1, dup', amount: 100, alert_type: 'other', account_age_days: 10, prior_alerts_90d: 0 },
+  ]);
+  const csv = toCSV(ranked);
+  assert.match(csv, /"A-1, dup"/);
+});
+
+test('toCSV: empty input produces just the header row', () => {
+  const csv = toCSV([]);
+  assert.equal(csv.trim(), 'rank,alert_id,amount,alert_type,account_age_days,prior_alerts_90d,risk_score,amount_component,type_component,tenure_component,repeat_component');
 });
