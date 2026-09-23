@@ -6,7 +6,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS } = require('./alert-scoring.js');
+const { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS, detectMissingColumns, EXPECTED_COLUMNS } = require('./alert-scoring.js');
 
 test('amount_component caps at 40 for amounts >= $40k', () => {
   const low = scoreAlert({ amount: 5000, alert_type: 'other', account_age_days: 400, prior_alerts_90d: 0 });
@@ -133,4 +133,25 @@ test('toCSV: quotes fields containing commas or quotes, escapes embedded quotes'
 test('toCSV: empty input produces just the header row', () => {
   const csv = toCSV([]);
   assert.equal(csv.trim(), 'rank,alert_id,amount,alert_type,account_age_days,prior_alerts_90d,risk_score,amount_component,type_component,tenure_component,repeat_component');
+});
+
+test('detectMissingColumns: returns empty when the CSV has every expected column', () => {
+  const csv = 'alert_id,amount,alert_type,account_age_days,prior_alerts_90d\nA-1,100,other,10,0\n';
+  assert.deepEqual(detectMissingColumns(csv), []);
+});
+
+test('detectMissingColumns: flags a renamed/missing column instead of silently scoring it as 0', () => {
+  // "account_age" instead of the expected "account_age_days" -- a plausible
+  // real-world mismatch between a bank's export and this tool's format.
+  const csv = 'alert_id,amount,alert_type,account_age,prior_alerts_90d\nA-1,100,other,10,0\n';
+  assert.deepEqual(detectMissingColumns(csv), ['account_age_days']);
+});
+
+test('detectMissingColumns: header order and case do not affect detection', () => {
+  const csv = 'PRIOR_ALERTS_90D,Alert_Id,amount,Alert_Type,account_age_days\n0,A-1,100,other,10\n';
+  assert.deepEqual(detectMissingColumns(csv), []);
+});
+
+test('detectMissingColumns: empty input reports every expected column missing', () => {
+  assert.deepEqual(detectMissingColumns(''), EXPECTED_COLUMNS);
 });

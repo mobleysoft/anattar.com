@@ -33,6 +33,7 @@
     <button id="loadSampleBtn" type="button">Load sample CSV</button>
     <button id="downloadBtn" type="button" disabled>Download ranked CSV</button>
     <div id="status" style="margin-top:10px; font-size:12px; color:#9aa0a6;"></div>
+    <div id="columnWarning" style="display:none; margin-top:10px; font-size:12px; color:#ffd166; border:1px solid #4a3c1a; background:#1f1a0d; border-radius:6px; padding:10px;"></div>
   </div>
 
   <div class="panel">
@@ -74,6 +75,7 @@
     const body = document.getElementById('resultsBody');
     const emptyState = document.getElementById('emptyState');
     const downloadBtn = document.getElementById('downloadBtn');
+    const columnWarning = document.getElementById('columnWarning');
     let lastRanked = [];
 
     const SAMPLE_CSV = `alert_id,amount,alert_type,account_age_days,prior_alerts_90d
@@ -88,6 +90,18 @@ A-1006,32000,large_cash,1000,0`;
       if (score >= 60) return 'score-high';
       if (score >= 30) return 'score-med';
       return 'score-low';
+    }
+
+    function showColumnWarning(missing) {
+      if (!missing.length) {
+        columnWarning.style.display = 'none';
+        columnWarning.textContent = '';
+        return;
+      }
+      columnWarning.style.display = 'block';
+      columnWarning.textContent = `Warning: this CSV is missing expected column(s): ${missing.join(', ')}. `
+        + `Affected score component(s) will read as 0 for every alert -- rankings below may not reflect real risk. `
+        + `Check your export's column headers against the documented format.`;
     }
 
     function render(alerts) {
@@ -120,6 +134,7 @@ A-1006,32000,large_cash,1000,0`;
       if (!file) return;
       const reader = new FileReader();
       reader.onload = () => {
+        showColumnWarning(window.AlertScoring.detectMissingColumns(reader.result));
         const alerts = window.AlertScoring.parseCSV(reader.result);
         render(alerts);
       };
@@ -128,6 +143,7 @@ A-1006,32000,large_cash,1000,0`;
     });
 
     document.getElementById('loadSampleBtn').addEventListener('click', () => {
+      showColumnWarning(window.AlertScoring.detectMissingColumns(SAMPLE_CSV));
       const alerts = window.AlertScoring.parseCSV(SAMPLE_CSV);
       render(alerts);
     });

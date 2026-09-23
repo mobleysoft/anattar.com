@@ -96,7 +96,7 @@ function rankAlerts(alerts) {
  * lines. Not a general RFC4180 parser -- adequate for a bank's simple
  * alert-export CSV, which is the stated scope.
  */
-function parseCSV(text) {
+function parseCSVRows(text) {
   const rows = [];
   let row = [];
   let field = '';
@@ -134,8 +134,11 @@ function parseCSV(text) {
     row.push(field);
     rows.push(row);
   }
+  return rows.filter((r) => r.some((cell) => cell.trim() !== ''));
+}
 
-  const nonEmptyRows = rows.filter((r) => r.some((cell) => cell.trim() !== ''));
+function parseCSV(text) {
+  const nonEmptyRows = parseCSVRows(text);
   if (nonEmptyRows.length === 0) return [];
 
   const header = nonEmptyRows[0].map((h) => h.trim().toLowerCase());
@@ -146,6 +149,23 @@ function parseCSV(text) {
     });
     return obj;
   });
+}
+
+const EXPECTED_COLUMNS = ['alert_id', 'amount', 'alert_type', 'account_age_days', 'prior_alerts_90d'];
+
+// A compliance officer's own CSV export may use different column names than
+// this tool expects (e.g. "account_age" instead of "account_age_days") --
+// parseCSV silently treats a missing column as absent on every row, which
+// silently zeroes out that score component on every alert rather than
+// erroring. That's a real risk for a tool whose whole value proposition is
+// being explainable: a wrong-but-plausible-looking ranked queue is worse
+// than an obvious upfront warning, especially for an AML/fraud triage tool
+// where score components silently reading as 0 could hide real risk.
+function detectMissingColumns(text) {
+  const rows = parseCSVRows(text);
+  if (rows.length === 0) return EXPECTED_COLUMNS.slice();
+  const header = rows[0].map((h) => h.trim().toLowerCase());
+  return EXPECTED_COLUMNS.filter((c) => !header.includes(c));
 }
 
 const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -193,8 +213,8 @@ function toCSV(rankedAlerts) {
 
 // Export for both Node (testing) and browser (dashboard) use.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS };
+  module.exports = { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS, detectMissingColumns, EXPECTED_COLUMNS };
 }
 if (typeof window !== 'undefined') {
-  window.AlertScoring = { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS };
+  window.AlertScoring = { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS, detectMissingColumns, EXPECTED_COLUMNS };
 }
