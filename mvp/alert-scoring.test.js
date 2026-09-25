@@ -6,7 +6,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS, detectMissingColumns, EXPECTED_COLUMNS } = require('./alert-scoring.js');
+const { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS, detectMissingColumns, EXPECTED_COLUMNS, toNumber } = require('./alert-scoring.js');
 
 test('amount_component caps at 40 for amounts >= $40k', () => {
   const low = scoreAlert({ amount: 5000, alert_type: 'other', account_age_days: 400, prior_alerts_90d: 0 });
@@ -154,4 +154,37 @@ test('detectMissingColumns: header order and case do not affect detection', () =
 
 test('detectMissingColumns: empty input reports every expected column missing', () => {
   assert.deepEqual(detectMissingColumns(''), EXPECTED_COLUMNS);
+});
+
+test('toNumber: strips a leading "$" and thousands-separator commas', () => {
+  assert.equal(toNumber('$45,000'), 45000);
+  assert.equal(toNumber('45,000'), 45000);
+  assert.equal(toNumber('45,000.00'), 45000);
+  assert.equal(toNumber('$ 1,234.50'), 1234.5);
+});
+
+test('toNumber: plain numbers and numeric types still work unchanged', () => {
+  assert.equal(toNumber(45000), 45000);
+  assert.equal(toNumber('45000'), 45000);
+  assert.equal(toNumber('  600 '), 600);
+});
+
+test('toNumber: genuinely non-numeric input still degrades to NaN, not a false 0', () => {
+  assert.equal(Number.isNaN(toNumber('not-a-number')), true);
+  assert.equal(Number.isNaN(toNumber(undefined)), true);
+  assert.equal(Number.isNaN(toNumber(null)), true);
+  assert.equal(Number.isNaN(toNumber('')), true);
+});
+
+test('a currency-formatted amount ($45,000) scores the same as its bare numeric equivalent, not 0', () => {
+  const bare = scoreAlert({ amount: 45000, alert_type: 'other', account_age_days: 400, prior_alerts_90d: 0 });
+  const currency = scoreAlert({ amount: '$45,000', alert_type: 'other', account_age_days: 400, prior_alerts_90d: 0 });
+  assert.equal(currency.score_breakdown.amount_component, bare.score_breakdown.amount_component);
+  assert.equal(currency.score_breakdown.amount_component, 40);
+});
+
+test('a comma-formatted account_age_days/prior_alerts_90d still parses correctly', () => {
+  const a = scoreAlert({ amount: 0, alert_type: 'other', account_age_days: '1,200', prior_alerts_90d: '10' });
+  assert.equal(a.score_breakdown.tenure_component, 0); // 1200 days >= 365
+  assert.equal(a.score_breakdown.repeat_component, 20); // 10 * 5, capped at 20
 });

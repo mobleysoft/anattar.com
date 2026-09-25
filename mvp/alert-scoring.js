@@ -43,9 +43,26 @@ const TYPE_WEIGHTS = {
   other: 5,
 };
 
+// A bank's CSV export commonly formats numeric fields as currency/with
+// thousands separators ("$45,000", "45,000.00") rather than a bare number.
+// Number("$45,000") is NaN, so every numeric component silently scored 0 for
+// a perfectly valid, common real-world value -- the same "silently reads as
+// 0" risk class detectMissingColumns() already exists to catch for a missing
+// column, just one level deeper (a malformed value in a present column).
+// Strips a leading "$" and thousands-separator commas before parsing; a
+// value that still isn't numeric after that (typos, free text) correctly
+// falls through to NaN, preserving the existing degrade-to-0 behavior below.
+function toNumber(value) {
+  if (typeof value === 'number') return value;
+  if (value === undefined || value === null) return NaN;
+  const cleaned = String(value).trim().replace(/^\$\s*/, '').replace(/,/g, '').trim();
+  if (cleaned === '') return NaN;
+  return Number(cleaned);
+}
+
 function amountComponent(amount) {
-  const n = Number(amount) || 0;
-  return Math.min(n / 1000, 40);
+  const n = toNumber(amount);
+  return Math.min((Number.isNaN(n) ? 0 : n) / 1000, 40);
 }
 
 function typeComponent(alertType) {
@@ -54,7 +71,7 @@ function typeComponent(alertType) {
 }
 
 function tenureComponent(accountAgeDays) {
-  const n = Number(accountAgeDays);
+  const n = toNumber(accountAgeDays);
   if (Number.isNaN(n)) return 0;
   if (n < 90) return 15;
   if (n < 365) return 7;
@@ -62,8 +79,8 @@ function tenureComponent(accountAgeDays) {
 }
 
 function repeatComponent(priorAlerts90d) {
-  const n = Number(priorAlerts90d) || 0;
-  return Math.min(n * 5, 20);
+  const n = toNumber(priorAlerts90d);
+  return Math.min((Number.isNaN(n) ? 0 : n) * 5, 20);
 }
 
 function scoreAlert(alert) {
@@ -213,8 +230,8 @@ function toCSV(rankedAlerts) {
 
 // Export for both Node (testing) and browser (dashboard) use.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS, detectMissingColumns, EXPECTED_COLUMNS };
+  module.exports = { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS, detectMissingColumns, EXPECTED_COLUMNS, toNumber };
 }
 if (typeof window !== 'undefined') {
-  window.AlertScoring = { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS, detectMissingColumns, EXPECTED_COLUMNS };
+  window.AlertScoring = { scoreAlert, rankAlerts, parseCSV, escapeHtml, toCSV, TYPE_WEIGHTS, detectMissingColumns, EXPECTED_COLUMNS, toNumber };
 }
