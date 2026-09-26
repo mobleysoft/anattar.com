@@ -56,6 +56,31 @@ async function handleInterest(request, env) {
   return jsonResponse({ ok: true }, 201);
 }
 
+// Real gap found in the 2026-09-26 depth audit: handleInterest() above has
+// written real lead submissions to env.LEADS since it was added, but there
+// was never a read path -- the only way to see who submitted interest was a
+// raw `wrangler kv key list`/`get` CLI call against the namespace ID by
+// hand, no repeatable admin view. Same write-only-KV gap already found and
+// fixed on alhena.cc's self_reflection_log (2026-09-22); reuses that exact
+// fail-closed pattern rather than inventing new auth: a query-param secret,
+// identical 404 whether unset or wrong, so this route can never become an
+// accidental open read of real submitter emails just because it exists --
+// it only starts working once a human deliberately runs
+// `wrangler secret put ANATTAR_ADMIN_SECRET`.
+async function handleLeadsAdmin(request, env) {
+  const url = new URL(request.url);
+  const configuredSecret = env.ANATTAR_ADMIN_SECRET;
+  const providedSecret = url.searchParams.get('secret') || '';
+  if (!configuredSecret || providedSecret !== configuredSecret) {
+    return jsonResponse({ error: 'Not found' }, 404);
+  }
+  const list = await env.LEADS.list({ prefix: 'lead:' });
+  const leads = await Promise.all(
+    list.keys.map(async (k) => JSON.parse(await env.LEADS.get(k.name)))
+  );
+  return jsonResponse({ count: leads.length, leads });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -68,6 +93,10 @@ export default {
         });
       }
       return handleInterest(request, env);
+    }
+
+    if (url.pathname === '/api/leads' && request.method === 'GET') {
+      return handleLeadsAdmin(request, env);
     }
 
     const asset = await env.ASSETS.fetch(request);
