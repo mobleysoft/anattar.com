@@ -112,10 +112,12 @@ A-1006,32000,large_cash,1000,0`;
       body.innerHTML = '';
       ranked.forEach((a, i) => {
         const tr = document.createElement('tr');
+        const amountNum = window.AlertScoring.toNumber(a.amount);
+        const displayAmount = Number.isNaN(amountNum) ? 0 : amountNum;
         tr.innerHTML = `
           <td>${i + 1}</td>
           <td>${esc(a.alert_id || '')}</td>
-          <td>$${Number(a.amount || 0).toLocaleString()}</td>
+          <td>$${displayAmount.toLocaleString()}</td>
           <td>${esc(a.alert_type || '')}</td>
           <td>${esc(a.account_age_days || '')}</td>
           <td>${esc(a.prior_alerts_90d || '')}</td>
